@@ -25,11 +25,32 @@ type Multivector = M.Map [Vector] Double
 type InnerProd = M.Map (Vector, Vector) Double
 
 --define an orthonormal frame with dimension n, make G(n,0)
-orthonormal :: Int -> ([Multivector], InnerProd)
-orthonormal n = let vec n = Vector ('e':(show n)) n
-                    inner = M.fromList [((vec i, vec j), if i==j then 1 else 0) | i <- [1..n], j <- [i..n]]
-                    multis = fmap (\x -> makeMulti [([vec x],1)]) [1..n]
-                in (multis,inner)
+orthonormalPos :: Int -> ([Multivector], InnerProd)
+orthonormalPos n = let vec n = Vector ('e':(show n)) n
+                       inner = M.fromList [((vec i, vec j), if i==j then 1 else 0) | i <- [1..n], j <- [i..n]]
+                       multis = fmap (\x -> makeMulti [([vec x],1)]) [1..n]
+                   in (multis,inner)
+
+--orthonormal wher ethe magnitudes are all negative
+orthonormalNeg :: Int -> ([Multivector], InnerProd)
+orthonormalNeg n = let vec n = Vector ('e':(show n)) n
+                       inner = M.fromList [((vec i, vec j), if i==j then (-1) else 0) | i <- [1..n], j <- [i..n]]
+                       multis = fmap (\x -> makeMulti [([vec x],1)]) [1..n]
+                   in (multis,inner)
+
+--create a mixed signature orthonormal basis
+--make it so the positive elements are ordered first
+fromSignature :: (Int, Int) -> ([Multivector], InnerProd)
+fromSignature (positive, negative) = let vecP n = Vector ('p':(show n)) n
+                                         vecM n = Vector ('m':(show n)) (n+positive)
+                                         multis = (fmap (\x -> makeMulti [([vecP x],1)]) [1..positive]) ++ (fmap (\x -> makeMulti [([vecM x],1)])) [1..negative]
+                                         posVecs = fmap vecP [1..positive]
+                                         negVecs = fmap vecM [1..negative]
+                                         innerPos = M.fromList [((vecP i, vecP j), if i==j then 1 else 0) | i <- [1..positive], j <- [i..positive]]
+                                         innerNeg = M.fromList [((vecM i, vecM j), if i==j then (-1) else 0) | i <- [1..negative], j <- [i..negative]]
+                                         innerBetween = M.fromList [((vecP i, vecM j), 0) | i <- [1..positive], j <- [1..negative]]
+                                     in (multis, foldr M.union M.empty [innerPos, innerNeg, innerBetween])
+
 
 one :: Multivector
 one = makeMulti [([],1)]
@@ -108,6 +129,7 @@ mMult inner x y = makeMulti $ concat $ ((mult' inner) <$> M.assocs x <*> M.assoc
 --some more definitions
 
 --I suppose these are only correct for vectors and not general multivectors
+--want to define the general equations here
 mOuter :: InnerProd -> Multivector -> Multivector -> Multivector
 mOuter inner x y = mScale (1/2) ((mMult inner x y) `mSub` (mMult inner y x))
 mInner :: InnerProd -> Multivector -> Multivector -> Multivector
@@ -119,6 +141,11 @@ extractGrade n m = M.filterWithKey (\vec _ -> length vec == n) m
 
 mRev :: InnerProd -> Multivector -> Multivector
 mRev inner x = canon inner $ M.mapKeys reverse x
+
+--start defining standard linear mappings
+--rotation
+--projection
+--mirroring
 
 
 {- good and functioning
