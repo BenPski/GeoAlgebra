@@ -86,10 +86,14 @@ makeMulti x = M.filter (/=0) $ M.fromListWith (+) x
 mScale :: Double -> Multivector -> Multivector
 mScale s = M.map (s*)
 
+isBlade :: Multivector -> Bool
+isBlade = (1==) . M.size
+
 --check if all the terms have a vector grade equal to n
 isGrade :: Int -> Multivector -> Bool
 isGrade n m = let lens = n : (fmap (\(vec,_) -> length vec) $ M.assocs m)
               in and $ zipWith (==) lens (tail lens)
+
 
 --map the canonincalizing function over all the terms seperately
 --currently very innefficient, but it works
@@ -118,7 +122,7 @@ canon inner m = M.filter (/=0) $ foldr (M.unionWith (+)) M.empty $ fmap (canon' 
 
 mAdd :: Multivector -> Multivector -> Multivector
 mAdd x y = M.filter (/=0) $ M.unionWith (+) x y
-
+mSub :: Multivector -> Multivector -> Multivector
 mSub x y = mAdd x (mScale (-1) y)
 
 mMult :: InnerProd -> Multivector -> Multivector -> Multivector
@@ -130,11 +134,39 @@ mMult inner x y = makeMulti $ concat $ ((mult' inner) <$> M.assocs x <*> M.assoc
 
 --I suppose these are only correct for vectors and not general multivectors
 --want to define the general equations here
-mOuter :: InnerProd -> Multivector -> Multivector -> Multivector
-mOuter inner x y = mScale (1/2) ((mMult inner x y) `mSub` (mMult inner y x))
-mInner :: InnerProd -> Multivector -> Multivector -> Multivector
-mInner inner x y = mScale (1/2) ((mMult inner x y) `mAdd` (mMult inner y x))
+mOuterV :: InnerProd -> Multivector -> Multivector -> Multivector
+mOuterV inner x y = mScale (1/2) ((mMult inner x y) `mSub` (mMult inner y x))
+mInnerV :: InnerProd -> Multivector -> Multivector -> Multivector
+mInnerV inner x y = mScale (1/2) ((mMult inner x y) `mAdd` (mMult inner y x))
 
+{-
+The outer and inner products can be defined for blades as
+outer a b = extractGrade (i+j) (mult a b) where i = grade a, j = grade b
+inner a b = extractGrade (i-j) (mult a b)
+
+so the inner and outer products are
+    outerBlabe <$> assocs a <*> assocs b
+    innerBlade <$> assocs a <*> assocs b
+
+However it is dubious whether or not to make the inner product extract
+    i-j
+    or
+    |i-j|
+-}
+
+mOuter :: InnerProd -> Multivector -> Multivector -> Multivector
+mOuter inner x y = makeMulti $ concat $ (outerBlade inner) <$> M.assocs x <*> M.assocs y
+    where
+        outerBlade inner a@(vecA, coeA) b@(vecB, coeB) = let i = length vecA
+                                                             j = length vecB
+                                                         in M.assocs $ extractGrade (i+j) (mMult inner (makeMulti [a]) (makeMulti [b]))
+
+mInner :: InnerProd -> Multivector -> Multivector -> Multivector
+mInner inner x y = makeMulti $ concat $ (innerBlade inner) <$> M.assocs x <*> M.assocs y
+    where
+        innerBlade inner a@(vecA, coeA) b@(vecB, coeB) = let i = length vecA
+                                                             j = length vecB
+                                                         in M.assocs $ extractGrade (abs $ i-j) (mMult inner (makeMulti [a]) (makeMulti [b]))
 --extract a certain grade from a multivector
 extractGrade :: Int -> Multivector -> Multivector
 extractGrade n m = M.filterWithKey (\vec _ -> length vec == n) m
